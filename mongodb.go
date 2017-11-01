@@ -2,8 +2,10 @@ package mongodb
 
 import (
 	"fmt"
+	"time"
 
 	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 /*
@@ -62,6 +64,50 @@ func (m *Mapper) Create(data interface{}) error {
 	}
 	c := m.Conn.DB(m.DBConfig.Database).C(m.Collection)
 	return c.Insert(data)
+}
+
+/*
+Search - Searching data in db between fromDate and toDate and substr in "message"
+*/
+func (m *Mapper) Search(dateFrom, dateTo time.Time, substr string) (interface{}, error) {
+	if m.Conn == nil {
+		err := m.Connect()
+		if err != nil {
+			fmt.Println("Error connecting: ", err)
+			return nil, err
+		}
+	}
+	c := m.Conn.DB(m.DBConfig.Database).C(m.Collection)
+	var logs []interface{}
+
+	if dateTo == time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC) {
+		dateTo = time.Now()
+	}
+	fmt.Println(dateFrom, dateTo, substr)
+	var err error
+	if substr != "" {
+		err = c.Find(
+			bson.M{
+				"timestamp": bson.M{
+					"$gte": dateFrom.Format(time.RFC3339Nano),
+					"$lte": dateTo.Format(time.RFC3339Nano),
+				},
+				"message": &bson.RegEx{Pattern: substr, Options: "i"},
+			}).All(&logs)
+	} else {
+		err = c.Find(
+			bson.M{
+				"timestamp": bson.M{
+					"$gte": dateFrom.Format(time.RFC3339Nano),
+					"$lte": dateTo.Format(time.RFC3339Nano),
+				},
+			}).All(&logs)
+	}
+	if err != nil {
+		fmt.Println("Error request: ", err)
+	}
+	fmt.Println("Data: ", logs)
+	return logs, nil
 }
 
 /*
